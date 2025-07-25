@@ -20,5 +20,5 @@ The chatbot answers user queries based on indexed and embedded content from a sp
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/sarthak1322/VidyaSetu.git
+git clone https://github.com/Sarthak1322/VidyaSetu.git
 cd VidyaSetu
