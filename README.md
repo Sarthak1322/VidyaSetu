@@ -46,7 +46,7 @@ source .venv/bin/activate
 Install all the required Python packages from `requirements.txt`.
 
 ```bash
-uv pip install -r requirements.txt
+UV_TIMEOUT=120 uv pip install -r requirements.txt
 ```
 
 **4. Set Up Your API Key**
