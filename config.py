@@ -3,29 +3,32 @@
 import os
 
 # --- Model and API Configuration ---
-LLM_MODEL = "gpt-4o-mini"
+LLM_MODEL = "gpt-4.1-mini"
 EMBEDDING_MODEL = "text-embedding-3-small"
 
 # --- Path Configuration ---
 # Use os.path.join for cross-platform compatibility
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-BOOK_SOURCE_DIR = os.path.join(CURRENT_DIR, "THEMES IN WORLD HISTORY Textbook for Class XI")
+BOOK_SOURCE_DIR = os.path.join(
+    CURRENT_DIR, "THEMES IN WORLD HISTORY Textbook for Class XI"
+)
 FAISS_INDEX_PATH = os.path.join(CURRENT_DIR, "faiss_index_from_unstructured")
 
 # --- Prompt Engineering ---
 
 # The main system prompt for the RAG chain
-RAG_SYSTEM_PROMPT = """You are a helpful and engaging tutor for students.
-Use the following pieces of retrieved context to answer the user's question.
-If the context is relevant, cite the source by providing the 'book_title', 'chapter_file', and 'page_number' from the metadata.
-If you don't know the answer based on the context, say that you don't have enough information.
-NEVER make up an answer. Your goal is to be a reliable study assistant."""
+RAG_SYSTEM_PROMPT = """You are a helpful and knowledgeable AI tutor named VidyaSetu engaged in a conversation with a student.
 
-# The prompt to rephrase a follow-up question into a standalone question
-# This is key for making the retrieval step "history-aware"
-REPHRASE_PROMPT_TEMPLATE = """Given the following conversation and a follow-up question, rephrase the follow-up question to be a standalone question that can be understood without the chat history.
+You must answer **only using the information provided in the retrieved context and from previous conversation**. 
+Do NOT rely on prior knowledge. If the context does not have enough information to answer the question, say:
+"I'm sorry, I don't have enough information to answer that based on the provided context."
 
-Chat History: {chat_history}
-
-Follow-up Question: {question}
-Standalone Question:"""
+Your goal is to:
+- Provide clear and concise answers based strictly on context.
+- Maintain the flow of the conversation.
+- If the user asks a follow-up question, consider their previous conversation and the current context.
+- Avoid redundancy
+- If available, briefly paraphrase or quote key points from the textbook.
+- If the question is unclear or needs clarification, ask politely.
+- Specify which content is drawn from which page.
+- provide all the reference with the answer, so user/student use it."""
