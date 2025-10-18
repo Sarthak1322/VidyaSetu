@@ -9,6 +9,8 @@ from langchain.docstore.document import Document
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from openai import OpenAI
+from unstructured.partition.pdf import partition_pdf
+import pandas as pd
 
 # Local configuration import
 import config
@@ -17,6 +19,7 @@ import config
 class VidyaSetuTutor:
     """
     A class-based RAG tutor that is conversational and stateful.
+    Supports PDF, TXT and Excel (.xlsx) documents.
     """
 
     def __init__(self):
@@ -33,9 +36,7 @@ class VidyaSetuTutor:
             print("✅ Tutor is ready to chat!")
         else:
             self.retriever = None
-            print(
-                "🛑 Tutor initialization failed: Could not set up document retriever."
-            )
+            print("🛑 Tutor initialization failed: Could not set up document retriever.")
 
     def _validate_api_key(self):
         """Ensures the OpenAI API key is set."""
@@ -57,9 +58,7 @@ class VidyaSetuTutor:
             print("ℹ️ No saved vector store found. Creating a new one...")
             docs = self._get_documents_from_source(config.BOOK_SOURCE_DIR)
             if not docs:
-                print(
-                    "🛑 Error: No documents were extracted. Cannot create vector store."
-                )
+                print("🛑 Error: No documents were extracted. Cannot create vector store.")
                 return None
 
             print(f"ℹ️ Creating new FAISS index at: {config.FAISS_INDEX_PATH}")
@@ -69,49 +68,69 @@ class VidyaSetuTutor:
             return vector_store
 
     def _get_documents_from_source(self, source_path: str) -> List[Document]:
-        """Processes PDFs from a source directory using 'unstructured'."""
+        """Processes PDF, TXT, and Excel files from a source directory."""
         if not os.path.exists(source_path) or not os.listdir(source_path):
-            print(
-                f"🛑 Warning: Source directory '{source_path}' is empty or not found."
-            )
-            print("👉 Please add your PDF files to this directory to continue.")
-            # Create the directory if it doesn't exist for the user
+            print(f"🛑 Warning: Source directory '{source_path}' is empty or not found.")
+            print("👉 Please add your files (PDF/TXT/Excel) to continue.")
             os.makedirs(source_path, exist_ok=True)
             return []
 
         all_docs = []
-        book_title = os.path.basename(os.path.normpath(source_path))
-        pdf_files = [
-            f for f in sorted(os.listdir(source_path)) if f.lower().endswith(".pdf")
-        ]
+        files = sorted(os.listdir(source_path))
 
-        print(f"📚 Processing book: '{book_title}' with {len(pdf_files)} PDF(s)...")
+        print(f"📚 Processing folder '{source_path}' with {len(files)} files...")
 
-        for pdf_file in pdf_files:
-            pdf_path = os.path.join(source_path, pdf_file)
-            print(f"  📖 Reading chapter: '{pdf_file}'...")
-            try:
-                elements = partition_pdf(
-                    filename=pdf_path,
-                    strategy="hi_res",
-                    chunking_strategy="by_title",
-                    infer_table_structure=True,
-                )
-                for el in elements:
-                    if el.text.strip():
-                        el_metadata = el.metadata.to_dict()
-                        el_metadata.update(
-                            {"book_title": book_title, "chapter_file": pdf_file}
-                        )
-                        all_docs.append(
-                            Document(page_content=el.text, metadata=el_metadata)
-                        )
-            except Exception as e:
-                print(f"🛑 Error processing file {pdf_path}: {e}")
+        for filename in files:
+            file_path = os.path.join(source_path, filename)
 
-        print(
-            f"✅ Source processing complete. Total documents created: {len(all_docs)}"
-        )
+            if filename.lower().endswith(".pdf"):
+                print(f"  📖 Processing PDF: {filename}")
+                try:
+                    elements = partition_pdf(
+                        filename=file_path,
+                        strategy="hi_res",
+                        chunking_strategy="by_title",
+                        infer_table_structure=True,
+                    )
+                    for el in elements:
+                        if el.text.strip():
+                            metadata = el.metadata.to_dict()
+                            metadata.update({"source_file": filename, "file_type": "pdf"})
+                            all_docs.append(Document(page_content=el.text, metadata=metadata))
+                except Exception as e:
+                    print(f"🛑 Error reading PDF {filename}: {e}")
+
+            elif filename.lower().endswith(".txt"):
+                print(f"  📝 Processing TXT: {filename}")
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        text = f.read()
+                        if text.strip():
+                            metadata = {"source_file": filename, "file_type": "txt"}
+                            all_docs.append(Document(page_content=text, metadata=metadata))
+                except Exception as e:
+                    print(f"🛑 Error reading TXT {filename}: {e}")
+
+            elif filename.lower().endswith(".xlsx"):
+                print(f"  📊 Processing Excel: {filename}")
+                try:
+                    df = pd.read_excel(file_path, sheet_name=None)  # Read all sheets
+                    for sheet_name, sheet_data in df.items():
+                        text = sheet_data.to_string(index=False, header=True)
+                        if text.strip():
+                            metadata = {
+                                "source_file": filename,
+                                "file_type": "excel",
+                                "sheet": sheet_name,
+                            }
+                            all_docs.append(Document(page_content=text, metadata=metadata))
+                except Exception as e:
+                    print(f"🛑 Error reading Excel {filename}: {e}")
+
+            else:
+                print(f"⚠️ Skipping unsupported file type: {filename}")
+
+        print(f"✅ Finished processing. Total documents created: {len(all_docs)}")
         return all_docs
 
     def ask(self, question: str, previous_response_id=None) -> str:
@@ -122,7 +141,7 @@ class VidyaSetuTutor:
         retrieved_docs = self.retriever.invoke(question)
 
         formatted_docs = "\n\n".join(
-            f"Source: (Book: {doc.metadata.get('book_title', 'N/A')}, File: {doc.metadata.get('chapter_file', 'N/A')}, Page: {doc.metadata.get('page_number', 'N/A')})\nContent: {doc.page_content}"
+            f"Source File: {doc.metadata.get('source_file', 'N/A')} | File Type: {doc.metadata.get('file_type', 'N/A')}\nContent: {doc.page_content}"
             for doc in retrieved_docs
         )
 
@@ -164,11 +183,9 @@ class VidyaSetuTutor:
             return
 
         print("\n--- VidyaSetu Tutor ---")
-        print(
-            "Ask a question about your documents. Type 'exit' or 'quit' to end the chat."
-        )
+        print("Ask a question about your documents. Type 'exit' or 'quit' to end the chat.")
 
-        previous_response_id = None  # <-- Initialize before loop
+        previous_response_id = None
 
         while True:
             user_question = input("\n🤔 You: ")
@@ -177,7 +194,6 @@ class VidyaSetuTutor:
                 break
 
             response = self.ask(user_question, previous_response_id)
-            # print(f"\n🤖 Tutor: {ai_answer}")
             print("VidyaSetu AI:", response.output_text)
             previous_response_id = response.id
 

@@ -5,12 +5,12 @@ from VidyaSetu import VidyaSetuTutor  # Imports your main class
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="VidyaSetu AI Bridge of knowledge",
+    page_title="POC Submission",
     page_icon="🤖"
 )
 
 # --- Page Title and Description ---
-st.title("🤖 VidyaSetu AI Bridge of knowledge")
+st.title("🤖 POC Submission")
 st.markdown("""
 Welcome to your personal AI tutor! Ask questions about your documents and get answers directly from the source material.
 """)
